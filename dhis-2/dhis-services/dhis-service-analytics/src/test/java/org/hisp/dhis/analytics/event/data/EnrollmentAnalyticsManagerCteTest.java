@@ -147,17 +147,13 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
 
   private final BeanRandomizer rnd = BeanRandomizer.create();
 
-  private QueryItemFilterBuilder filterBuilder;
-
-  @Spy
-  private EnrollmentTimeFieldSqlRenderer enrollmentTimeFieldSqlRenderer =
-      new EnrollmentTimeFieldSqlRenderer(sqlBuilder);
-
   @Spy private SystemSettings systemSettings;
 
   @Mock private DefaultDhisConfigurationProvider config;
 
   @Captor private ArgumentCaptor<String> sql;
+
+  private String programAUid;
 
   @BeforeEach
   public void setUp() {
@@ -172,6 +168,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
             new OrganisationUnitResolver.StageOuCteContext(
                 "\"ou\"", "", "\"ouname\" as ev_ouname, \"oucode\" as ev_oucode,"));
     subject = createEnrollmentAnalyticsManager(sqlBuilder, "postgresql");
+    programAUid = programA.getUid().toLowerCase();
   }
 
   @Test
@@ -190,7 +187,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                   from analytics_event_%s
                   where eventstatus != 'SCHEDULE' and ps = '%s' and "fWIAEtYVEGk"%s )
                 """)
-            .formatted(programA.getUid(), programStage.getUid(), inClause);
+            .formatted(programAUid, programStage.getUid(), inClause);
 
     Collection<Consumer<String>> assertions =
         Arrays.asList(
@@ -214,7 +211,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                   from analytics_event_%s
                   where eventstatus != 'SCHEDULE' and ps = '%s' )
                 """)
-            .formatted(programA.getUid(), programStage.getUid());
+            .formatted(programAUid, programStage.getUid());
 
     Collection<Consumer<String>> assertions =
         Arrays.asList(
@@ -243,7 +240,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                   from analytics_event_%s
                   where eventstatus != 'SCHEDULE' and ps = '%s' and "fWIAEtYVEGk"%s )
                 """)
-            .formatted(programA.getUid(), programStage.getUid(), nonNvInClause);
+            .formatted(programAUid, programStage.getUid(), nonNvInClause);
 
     Collection<Consumer<String>> assertions =
         Arrays.asList(
@@ -272,7 +269,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                   from analytics_event_%s
                   where eventstatus != 'SCHEDULE' and ps = '%s' and "fWIAEtYVEGk"%s )
                 """)
-            .formatted(programA.getUid(), programStage.getUid(), inClause);
+            .formatted(programAUid, programStage.getUid(), inClause);
 
     Collection<Consumer<String>> assertions =
         Arrays.asList(
@@ -579,7 +576,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                 """
                 inner join (
                     select
-                        ev.enrollment,
+                        ev.enrollment as enrollment,
                         max(ev."occurreddate") as event_occurreddate
                     from analytics_event_%s ev
                     where ev.eventstatus != 'SCHEDULE'
@@ -587,7 +584,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                     group by ev.enrollment
                 ) evf on evf.enrollment = ax.enrollment
                 """
-                    .formatted(programA.getUid()))));
+                    .formatted(programAUid))));
     assertThat(generatedSql, not(containsString("ax.\"occurreddate\" >=")));
   }
 
@@ -610,7 +607,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                 """
                 inner join (
                     select
-                        ev.enrollment,
+                        ev.enrollment as enrollment,
                         max(ev."occurreddate") as event_occurreddate
                     from analytics_event_%s ev
                     where ev.eventstatus != 'SCHEDULE'
@@ -618,7 +615,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                     group by ev.enrollment
                 ) evf on evf.enrollment = ax.enrollment
                 """
-                    .formatted(programA.getUid()))));
+                    .formatted(programAUid))));
     assertThat(generatedSql, not(containsString("where (((occurreddate >=")));
     assertThat(generatedSql, not(containsString("enrollmentdate >=")));
   }
@@ -642,11 +639,11 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
             noEof(
                 """
                 select
-                    ev.enrollment,
+                    ev.enrollment as enrollment,
                     max(ev."occurreddate") as event_occurreddate
                 from analytics_event_%s ev
                 """
-                    .formatted(programA.getUid()))));
+                    .formatted(programAUid))));
     assertThat(generatedSql, containsString(eventDateJoinProjection()));
     assertThat(generatedSql, not(containsString(", \"eventdate\" from analytics_enrollment")));
   }
@@ -722,7 +719,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
   }
 
   @Test
-  void verifyAggregateEnrollmentUsesClickHouseBucketLookupWithoutPostgresFallback() {
+  void verifyAggregateEnrollmentUsesJoinBasedPeriodLookupForClickHouse() {
     ClickHouseAnalyticsSqlBuilder clickHouseBuilder = new ClickHouseAnalyticsSqlBuilder("dhis2");
     JdbcEnrollmentAnalyticsManager clickHouseSubject =
         createEnrollmentAnalyticsManager(clickHouseBuilder, "clickhouse");
@@ -739,22 +736,23 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
 
     String generatedSql = sql.getValue();
 
+    // ClickHouse cannot resolve correlated scalar subqueries that reference non-constant outer
+    // columns; the period-bucket lookup is therefore emitted as a LEFT JOIN, mirroring Doris but
+    // using ClickHouse identifier quoting and date functions.
     assertThat(
         generatedSql,
         containsString(
-            "(select \"monthly\" from analytics_rs_dateperiodstructure as dps_period where dps_period.\"dateperiod\" = toDate(date_trunc('month', toDate(eb.\"enrollmentdate\")))) as \"monthly\""));
+            "left join analytics_rs_dateperiodstructure dps_period_eb_enrollmentdate "
+                + "on dps_period_eb_enrollmentdate.\"dateperiod\" = "
+                + "toDate(date_trunc('month', toDate(eb.\"enrollmentdate\")))"));
     assertThat(
-        generatedSql,
-        containsString(
-            ", (select \"monthly\" from analytics_rs_dateperiodstructure as dps_period where dps_period.\"dateperiod\" = toDate(date_trunc('month', toDate(eb.\"enrollmentdate\"))))"));
+        generatedSql, containsString("dps_period_eb_enrollmentdate.\"monthly\" as \"monthly\""));
+    assertThat(generatedSql, containsString(", dps_period_eb_enrollmentdate.\"monthly\""));
+
+    // Postgres-only constructs must not leak into the ClickHouse SQL.
     assertThat(generatedSql, not(containsString("::date")));
     assertThat(generatedSql, not(containsString(" interval ")));
     assertThat(generatedSql, not(containsString("make_date")));
-    assertThat(
-        generatedSql,
-        not(
-            containsString(
-                "left join analytics_rs_dateperiodstructure dps_period_eb_enrollmentdate")));
   }
 
   @Test
@@ -856,7 +854,8 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
             programIndicatorService, systemSettingsService, builder, dataElementService);
     programIndicatorSubqueryBuilder.init();
     ColumnMapper columnMapper = new ColumnMapper(builder, systemSettingsService);
-    filterBuilder = new QueryItemFilterBuilder(organisationUnitResolver, builder);
+    QueryItemFilterBuilder filterBuilder =
+        new QueryItemFilterBuilder(organisationUnitResolver, builder);
     EnrollmentTimeFieldSqlRenderer timeFieldRenderer = new EnrollmentTimeFieldSqlRenderer(builder);
     StageQuerySqlFacade stageQuerySqlFacade =
         new DefaultStageQuerySqlFacade(
@@ -981,7 +980,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                 row_number() over ( partition by enrollment order by occurreddate desc, created desc ) as rn
                 from analytics_event_%s where eventstatus != 'SCHEDULE' and ps = '%s' )
                 """
-                    .formatted(stageUid, deUid, deUid, programA.getUid(), stageUid))));
+                    .formatted(stageUid, deUid, deUid, programAUid, stageUid))));
 
     // Value projected as stage.de alias
     assertThat(generatedSql, containsString("as \"" + stageUid + "." + deUid + "\""));
@@ -1020,7 +1019,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                 row_number() over ( partition by enrollment order by occurreddate desc, created desc ) as rn
                 from analytics_event_%s where eventstatus != 'SCHEDULE' and ps = '%s' )
                 """
-                    .formatted(stageUid, deUid, deUid, programA.getUid(), stageUid))));
+                    .formatted(stageUid, deUid, deUid, programAUid, stageUid))));
 
     // Existence CTE
     assertThat(
@@ -1031,7 +1030,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                 select distinct enrollment from analytics_event_%s
                 where eventstatus != 'SCHEDULE' and ps = '%s'
                 """
-                    .formatted(programA.getUid(), stageUid))));
+                    .formatted(programAUid, stageUid))));
 
     // SELECT projections for repeatable stage
     assertThat(generatedSql, containsString("\"" + stageUid + "[-1]." + deUid + "\""));
@@ -1069,7 +1068,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
                 row_number() over ( partition by enrollment order by occurreddate desc, created desc ) as rn
                 from analytics_event_%s where eventstatus != 'SCHEDULE' and ps = '%s' and "%s" > '10' )
                 """
-                    .formatted(stageUid, deUid, deUid, programA.getUid(), stageUid, deUid))));
+                    .formatted(stageUid, deUid, deUid, programAUid, stageUid, deUid))));
 
     // Inner join (not left join) because filter exists
     assertThat(generatedSql, containsString("inner join " + stageUid + "_" + deUid + "_0"));
@@ -1099,7 +1098,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
             row_number() over ( partition by enrollment order by occurreddate desc, created desc ) as rn
             from analytics_event_%s where eventstatus != 'SCHEDULE' and ps = '%s' )
             """
-                .formatted(stageUid, deUid, deUid, programA.getUid(), stageUid));
+                .formatted(stageUid, deUid, deUid, programAUid, stageUid));
 
     testIt(
         EQ,
@@ -1121,7 +1120,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
             row_number() over ( partition by enrollment order by occurreddate desc, created desc ) as rn
             from analytics_event_%s where eventstatus != 'SCHEDULE' and ps = '%s' )
             """
-                .formatted(stageUid, deUid, deUid, programA.getUid(), stageUid));
+                .formatted(stageUid, deUid, deUid, programAUid, stageUid));
 
     testIt(
         NEQ,

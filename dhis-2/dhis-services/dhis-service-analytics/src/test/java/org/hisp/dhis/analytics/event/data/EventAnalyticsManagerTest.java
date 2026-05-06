@@ -194,7 +194,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     String expected =
         "select "
             + DEFAULT_COLUMNS_WITHOUT_REGISTRATION
-            + ", ax.\"quarterly\", ax.\"ou\" from "
+            + ", ax.\"quarterly\" as quarterly, ax.\"ou\" as ou from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA') limit 101";
 
@@ -252,7 +252,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     String expected =
         "select "
             + DEFAULT_COLUMNS_WITH_REGISTRATION
-            + ", ax.\"quarterly\", ax.\"ou\", ax.\""
+            + ", ax.\"quarterly\" as quarterly, ax.\"ou\" as ou, ax.\""
             + dataElement.getUid()
             + "_name"
             + "\" from "
@@ -275,7 +275,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ax.\"quarterly\", ax.\"ou\" from "
+        "ax.\"quarterly\" as quarterly, ax.\"ou\" as ou from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA')";
 
@@ -492,7 +492,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ax.\"quarterly\", ax.\"ou\" from "
+        "ax.\"quarterly\" as quarterly, ax.\"ou\" as ou from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA') and ax.\"ps\" = '"
             + programStage.getUid()
@@ -510,7 +510,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ax.\"quarterly\", ax.\"ou\", ax.\"fWIAEtYVEGk\" from "
+        "ax.\"quarterly\" as quarterly, ax.\"ou\" as ou, ax.\"fWIAEtYVEGk\" from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA') and ax.\"ps\" = '"
             + programStage.getUid()
@@ -529,7 +529,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ax.\"quarterly\", ax.\"ou\", ax.\"fWIAEtYVEGk\" from "
+        "ax.\"quarterly\" as quarterly, ax.\"ou\" as ou, ax.\"fWIAEtYVEGk\" from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA') and ax.\"ps\" = '"
             + programStage.getUid()
@@ -547,7 +547,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ax.\"quarterly\", ax.\"ou\" from "
+        "ax.\"quarterly\" as quarterly, ax.\"ou\" as ou from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA')"
             + " and ax.\"enrollmentstatus\" in ('ACTIVE','COMPLETED') and eventstatus in ('SCHEDULE') limit 101";
@@ -564,7 +564,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ps.\"quarterly\", ax.\"ou\" from "
+        "ps.\"quarterly\" as quarterly, ax.\"ou\" as ou from "
             + getTable(programA.getUid())
             + " as ax "
             + "where (ps.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" "
@@ -582,7 +582,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ax.\"quarterly\", ax.\"ou\" from "
+        "ax.\"quarterly\" as quarterly, ax.\"ou\" as ou from "
             + getTable(programA.getUid())
             + " as ax "
             + "where ((( ax.\"lastupdated\" >= '2000-01-01' and ax.\"lastupdated\" < '2000-04-01') )) and ax.\"uidlevel1\" "
@@ -668,7 +668,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ax.\"quarterly\", ax.\"ou\", ax.\"fWIAEtYVEGk\" from "
+        "ax.\"quarterly\" as quarterly, ax.\"ou\" as ou, ax.\"fWIAEtYVEGk\" from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA') and ax.\"ps\" = '"
             + programStage.getUid()
@@ -687,7 +687,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "ax.\"quarterly\", ax.\"ou\", ax.\"fWIAEtYVEGk\" from "
+        "ax.\"quarterly\" as quarterly, ax.\"ou\" as ou, ax.\"fWIAEtYVEGk\" from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA') and ax.\"ps\" = '"
             + programStage.getUid()
@@ -719,7 +719,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
     String expected =
-        "select count(ax.\"event\") as value,ax.\"quarterly\",ax.\"ou\",ax.\"fWIAEtYVEGk\" from "
+        "select count(ax.\"event\") as value,ax.\"quarterly\" as quarterly,ax.\"ou\" as ou,ax.\"fWIAEtYVEGk\" from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA') and ax.\"ps\" = '"
             + programStage.getUid()
@@ -751,7 +751,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
 
     verify(jdbcTemplate).queryForRowSet(sql.capture());
     String expected =
-        "select count(ax.\"event\") as value,ax.\"quarterly\",ax.\"ou\",ax.\"fWIAEtYVEGk\" from "
+        "select count(ax.\"event\") as value,ax.\"quarterly\" as quarterly,ax.\"ou\" as ou,ax.\"fWIAEtYVEGk\" from "
             + getTable(programA.getUid())
             + " as ax where (ax.\"quarterly\" in ('2000Q1') ) and ax.\"uidlevel1\" in ('ouabcdefghA') and ax.\"ps\" = '"
             + programStage.getUid()
@@ -994,7 +994,7 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
   }
 
   @Test
-  void verifyGetAggregatedEventQueryUsesClickHouseBucketLookupWithoutPostgresFallback() {
+  void verifyGetAggregatedEventQueryUsesJoinBasedPeriodLookupForClickHouse() {
     ClickHouseAnalyticsSqlBuilder clickHouseBuilder = new ClickHouseAnalyticsSqlBuilder("dhis2");
     JdbcEventAnalyticsManager clickHouseSubject =
         createEventAnalyticsManager(clickHouseBuilder, "clickhouse");
@@ -1016,22 +1016,26 @@ class EventAnalyticsManagerTest extends EventAnalyticsTest {
 
     verify(jdbcTemplate).queryForRowSet(sql.capture());
 
+    // ClickHouse cannot resolve correlated scalar subqueries that reference non-constant outer
+    // columns; the period-bucket lookup is therefore emitted as a LEFT JOIN, mirroring Doris but
+    // using ClickHouse identifier quoting and date functions.
     assertThat(
         sql.getValue(),
         containsString(
-            "(select \"monthly\" from analytics_rs_dateperiodstructure as dps_period where dps_period.\"dateperiod\" = toDate(date_trunc('month', toDate(ax.\"enrollmentdate\")))) as \"monthly\""));
+            "left join analytics_rs_dateperiodstructure as dps_period_ax_enrollmentdate "
+                + "on dps_period_ax_enrollmentdate.\"dateperiod\" = "
+                + "toDate(date_trunc('month', toDate(ax.\"enrollmentdate\")))"));
+    assertThat(
+        sql.getValue(), containsString("dps_period_ax_enrollmentdate.\"monthly\" as \"monthly\""));
     assertThat(
         sql.getValue(),
         containsString(
-            "group by (select \"monthly\" from analytics_rs_dateperiodstructure as dps_period where dps_period.\"dateperiod\" = toDate(date_trunc('month', toDate(ax.\"enrollmentdate\")))), ax.\"ou\", ax.\"fWIAEtYVEGk\""));
+            "group by dps_period_ax_enrollmentdate.\"monthly\", ax.\"ou\", ax.\"fWIAEtYVEGk\""));
+
+    // Postgres-only constructs must not leak into the ClickHouse SQL.
     assertThat(sql.getValue(), not(containsString("::date")));
     assertThat(sql.getValue(), not(containsString(" interval ")));
     assertThat(sql.getValue(), not(containsString("make_date")));
-    assertThat(
-        sql.getValue(),
-        not(
-            containsString(
-                "left join analytics_rs_dateperiodstructure as dps_period_ax_enrollmentdate")));
   }
 
   private JdbcEventAnalyticsManager createEventAnalyticsManager(
