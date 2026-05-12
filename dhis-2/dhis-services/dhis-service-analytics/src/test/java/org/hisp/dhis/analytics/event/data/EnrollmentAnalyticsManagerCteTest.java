@@ -1235,6 +1235,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
 
   @Test
   void verifyWithProgramIndicatorAndRelationshipTypeBothSidesTrackedEntity() {
+    when(sqlBuilder.supportsCorrelatedSubquery()).thenReturn(false);
     ProgramIndicator programIndicatorA = createProgramIndicator('A', programA, "", "");
 
     RelationshipType relationshipTypeA = createRelationshipType();
@@ -1259,6 +1260,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
 
   @Test
   void verifyWithProgramIndicatorAndRelationshipTypeDifferentConstraint() {
+    when(sqlBuilder.supportsCorrelatedSubquery()).thenReturn(false);
     ProgramIndicator programIndicatorA = createProgramIndicator('A', programA, "", "");
 
     RelationshipType relationshipTypeA =
@@ -1283,6 +1285,7 @@ class EnrollmentAnalyticsManagerCteTest extends EventAnalyticsTest {
 
   @Test
   void verifyWithProgramIndicatorAndRelationshipTypeBothSidesTrackedEntity2() {
+    when(sqlBuilder.supportsCorrelatedSubquery()).thenReturn(false);
     Program programB = createProgram('B');
     ProgramIndicator programIndicatorA = createProgramIndicator('A', programB, "", "");
 
