@@ -118,6 +118,7 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
 
     List<EntityNotifications> notifications = new ArrayList<>();
     ChangeLogAccumulator changeLogs = new ChangeLogAccumulator();
+    EntityWriteBatch batch = new EntityWriteBatch();
 
     //
     // Extract the entities to persist from the Bundle
@@ -134,7 +135,8 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
         boolean completedInThisImport =
             !bundle.isSkipSideEffects()
                 && isBeingCompleted(bundle.getPreheat(), trackerDto, isNewEntity);
-        ChangeLogAccumulator.Mark mark = changeLogs.mark();
+        ChangeLogAccumulator.Mark changeLogMark = changeLogs.mark();
+        EntityWriteBatch.Mark batchMark = batch.mark();
         try {
           V originalEntity = cloneEntityProperties(bundle.getPreheat(), trackerDto);
 
@@ -163,7 +165,7 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
             typeReport.getStats().incCreated();
             typeReport.addEntity(objectReport);
             updateAttributes(
-                bundle.getPreheat(), trackerDto, convertedDto, bundle.getUser(), changeLogs);
+                bundle.getPreheat(), trackerDto, convertedDto, bundle.getUser(), changeLogs, batch);
             bundle.addUpdatedTrackedEntities(getUpdatedTrackedEntities(convertedDto));
           } else {
             if (trackerDto.getTrackerType() == TrackerType.RELATIONSHIP) {
@@ -178,7 +180,12 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
                   bundle.getUser(),
                   changeLogs);
               updateAttributes(
-                  bundle.getPreheat(), trackerDto, convertedDto, bundle.getUser(), changeLogs);
+                  bundle.getPreheat(),
+                  trackerDto,
+                  convertedDto,
+                  bundle.getUser(),
+                  changeLogs,
+                  batch);
               entityManager.merge(convertedDto);
               typeReport.getStats().incUpdated();
               typeReport.addEntity(objectReport);
@@ -202,11 +209,13 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
           if (FlushMode.OBJECT == bundle.getFlushMode()) {
             // Flush entity INSERTs/UPDATEs before changelog INSERTs so FK references
             // (trackedentityid, eventid) exist before changelog rows reference them.
+            batch.flush(entityManager);
             entityManager.flush();
             changeLogs.flushAll(conn);
           }
         } catch (Exception e) {
-          changeLogs.rollbackTo(mark);
+          batch.rollbackTo(batchMark);
+          changeLogs.rollbackTo(changeLogMark);
 
           final String msg =
               "A Tracker Entity of type '"
@@ -238,6 +247,7 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
       if (FlushMode.AUTO == bundle.getFlushMode()) {
         // Flush entity INSERTs/UPDATEs before changelog INSERTs so FK references
         // (trackedentityid, eventid) exist before changelog rows reference them.
+        batch.flush(entityManager);
         entityManager.flush();
         changeLogs.flushAll(conn);
       }
@@ -287,7 +297,8 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
       T trackerDto,
       V hibernateEntity,
       UserDetails user,
-      ChangeLogAccumulator changeLogs);
+      ChangeLogAccumulator changeLogs,
+      EntityWriteBatch batch);
 
   /** Updates the {@link TrackerPreheat} object with the entity that has been persisted */
   protected abstract void updatePreheat(TrackerPreheat preheat, V convertedDto);
@@ -376,7 +387,8 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
       List<Attribute> payloadAttributes,
       TrackedEntity trackedEntity,
       UserDetails user,
-      ChangeLogAccumulator changeLogs) {
+      ChangeLogAccumulator changeLogs,
+      EntityWriteBatch batch) {
     if (payloadAttributes.isEmpty()) {
       return;
     }
@@ -403,7 +415,7 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
           boolean valueChanged = isNew || !Objects.equals(previousValue, attribute.getValue());
 
           if (isDelete && !isNew) {
-            delete(preheat, currentValue, trackedEntity, user, changeLogs);
+            delete(preheat, currentValue, trackedEntity, user, changeLogs, batch);
           } else if (valueChanged) {
             saveOrUpdateAttributeValue(
                 preheat,
@@ -413,7 +425,8 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
                 isNew,
                 previousValue,
                 user,
-                changeLogs);
+                changeLogs,
+                batch);
           }
         });
   }
@@ -426,7 +439,8 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
       boolean isNew,
       String previousValue,
       UserDetails user,
-      ChangeLogAccumulator changeLogs) {
+      ChangeLogAccumulator changeLogs,
+      EntityWriteBatch batch) {
     TrackedEntityAttributeValue attributeToPersist =
         Optional.ofNullable(currentValue)
             .orElseGet(
@@ -440,7 +454,7 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
             .setLastUpdated(new Date());
 
     saveOrUpdate(
-        preheat, isNew, trackedEntity, attributeToPersist, previousValue, user, changeLogs);
+        preheat, isNew, trackedEntity, attributeToPersist, previousValue, user, changeLogs, batch);
 
     handleReservedValue(attributeToPersist);
   }
@@ -450,15 +464,13 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
       TrackedEntityAttributeValue trackedEntityAttributeValue,
       TrackedEntity trackedEntity,
       UserDetails user,
-      ChangeLogAccumulator changeLogs) {
+      ChangeLogAccumulator changeLogs,
+      EntityWriteBatch batch) {
     if (isFileResource(trackedEntityAttributeValue)) {
       unassignFileResource(preheat, trackedEntity.getUid(), trackedEntityAttributeValue.getValue());
     }
 
-    entityManager.remove(
-        entityManager.contains(trackedEntityAttributeValue)
-            ? trackedEntityAttributeValue
-            : entityManager.merge(trackedEntityAttributeValue));
+    batch.stageTeavDelete(trackedEntityAttributeValue);
 
     changeLogs.addTrackedEntityChangeLog(
         trackedEntity,
@@ -476,20 +488,21 @@ public abstract class AbstractTrackerPersister<T extends TrackerDto, V extends I
       TrackedEntityAttributeValue trackedEntityAttributeValue,
       String previousValue,
       UserDetails user,
-      ChangeLogAccumulator changeLogs) {
+      ChangeLogAccumulator changeLogs,
+      EntityWriteBatch batch) {
     if (isFileResource(trackedEntityAttributeValue)) {
       assignFileResource(preheat, trackedEntity.getUid(), trackedEntityAttributeValue.getValue());
     }
 
     ChangeLogType changeLogType;
     if (isNew) {
-      entityManager.persist(trackedEntityAttributeValue);
+      batch.stageTeavInsert(trackedEntityAttributeValue);
       // In case it's a newly created attribute we'll add it back to TE,
       // so it can end up in preheat
       trackedEntity.getTrackedEntityAttributeValues().add(trackedEntityAttributeValue);
       changeLogType = CREATE;
     } else {
-      entityManager.merge(trackedEntityAttributeValue);
+      batch.stageTeavUpdate(trackedEntityAttributeValue);
       changeLogType = UPDATE;
     }
 
